@@ -12,25 +12,31 @@ function main() {
 }
 
 function update_sheet(sheet_name, docs, clients) {
-  var rows = [],
-      data;
-
-  for (i = 0; i < docs.length; i++) {
-    data = docs[i];
-    const client_id = data.client_id
-    const client = clients[client_id]
-    rows.push([data.dateissued, data.client_name, data.client_email, client.mobile, data.docnum, data.total]);
-  }
-
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet()
-  const sheet = spreadsheet.getSheetByName(sheet_name)
-  const lastRow = sheet.getLastRow();
-  console.log("last row: %d", lastRow)
-  const dataRange = sheet.getRange(lastRow+1, 1, rows.length, 6);
+  // Use LockService to prevent race conditions and avoid duplicate records
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(30000); // wait up to 30 seconds for others to finish
+
+    var rows = [], data;
+
+    for (i = 0; i < docs.length; i++) {
+      data = docs[i];
+      const client_id = data.client_id
+      const client = clients[client_id]
+      rows.push([data.dateissued, data.client_name, data.client_email, client.mobile, data.docnum, data.total]);
+    }
+
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet()
+    const sheet = spreadsheet.getSheetByName(sheet_name)
+    const lastRow = sheet.getLastRow();
+    console.log("last row: %d", lastRow)
+    const dataRange = sheet.getRange(lastRow+1, 1, rows.length, 6);
     dataRange.setValues(rows);
-  } catch (f) {
-    throw new Error('failed to update spreadsheet with: '+ f.message)
+
+  } catch (e) {
+    throw new Error('failed to update spreadsheet with: ' + e.message)
+  } finally {
+    lock.releaseLock();
   }
 }
 
